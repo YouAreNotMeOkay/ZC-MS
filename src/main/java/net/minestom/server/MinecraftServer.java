@@ -56,7 +56,7 @@ public final class MinecraftServer {
 
     // Config
     // Can be modified at performance cost when increased
-    public static final int TICK_PER_SECOND = Integer.getInteger("minestom.tps", 1000);
+    public static final int TICK_PER_SECOND = Integer.getInteger("minestom.tps", 10000);
     public static final int TICK_MS = 1000 / TICK_PER_SECOND;
 
     // In-Game Manager
