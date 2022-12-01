@@ -279,6 +279,7 @@ public record Pos(double x, double y, double z, float yaw, float pitch) implemen
         @NotNull Pos apply(double x, double y, double z, float yaw, float pitch);
     }
 
+    @Contract(pure = true)
     public @NotNull Pos clone() {
         try {
             return (Pos)super.clone();

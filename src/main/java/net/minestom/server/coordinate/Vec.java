@@ -489,6 +489,8 @@ public record Vec(double x, double y, double z) implements Point {
 
         @NotNull Vec apply(double x, double y, double z);
     }
+
+    @Contract(pure = true)
     public @NotNull Vec clone() {
         try {
             return (Vec)super.clone();
