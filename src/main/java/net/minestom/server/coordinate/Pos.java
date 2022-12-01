@@ -279,6 +279,13 @@ public record Pos(double x, double y, double z, float yaw, float pitch) implemen
         @NotNull Pos apply(double x, double y, double z, float yaw, float pitch);
     }
 
+    public @NotNull Pos clone() {
+        try {
+            return (Pos)super.clone();
+        } catch (CloneNotSupportedException var2) {
+            throw new Error(var2);
+        }
+    }
     /**
      * Fixes a yaw value that is not between -180.0F and 180.0F
      * So for example -1355.0F becomes 85.0F and 225.0F becomes -135.0F
