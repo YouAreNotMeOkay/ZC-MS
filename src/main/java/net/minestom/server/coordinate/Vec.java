@@ -489,7 +489,13 @@ public record Vec(double x, double y, double z) implements Point {
 
         @NotNull Vec apply(double x, double y, double z);
     }
-
+    public @NotNull Vec clone() {
+        try {
+            return (Vec)super.clone();
+        } catch (CloneNotSupportedException var2) {
+            throw new Error(var2);
+        }
+    }
     @FunctionalInterface
     public interface Interpolation {
         Interpolation LINEAR = a -> a;
