@@ -13,7 +13,7 @@ import java.util.function.DoubleUnaryOperator;
  * <p>
  * To become a value then primitive type.
  */
-public record Pos(double x, double y, double z, float yaw, float pitch) implements Point {
+public record Pos(double x, double y, double z, float yaw, float pitch) implements Point,Cloneable {
     public static final Pos ZERO = new Pos(0, 0, 0);
 
     public Pos {
