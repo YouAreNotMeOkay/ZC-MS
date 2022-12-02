@@ -498,6 +498,13 @@ public record Vec(double x, double y, double z) implements Point {
             throw new Error(var2);
         }
     }
+    @Contract(pure = true)
+    public @NotNull Vec crossProduct(@NotNull Vec o) {
+        double newX = this.y * o.z - o.y * this.z;
+        double newY = this.z * o.x - o.z * this.x;
+        double newZ = this.x * o.y - o.x * this.y;
+        return new Vec(newX,newY,newZ);
+    }
     @FunctionalInterface
     public interface Interpolation {
         Interpolation LINEAR = a -> a;
