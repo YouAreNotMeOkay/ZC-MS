@@ -1,12 +1,25 @@
 package net.minestom.server.instance;
 
+
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.IntIntImmutablePair;
 import net.minestom.server.MinecraftServer;
+import net.minestom.server.coordinate.Pos;
+import net.minestom.server.coordinate.Vec;
+import net.minestom.server.entity.Entity;
+import net.minestom.server.entity.EntitySpawnType;
+import net.minestom.server.entity.EntityType;
+import net.minestom.server.entity.LivingEntity;
+import net.minestom.server.entity.metadata.other.ArmorStandMeta;
+import net.minestom.server.entity.metadata.other.ItemFrameMeta;
+import net.minestom.server.instance.*;
 import net.minestom.server.instance.block.Block;
 import net.minestom.server.instance.block.BlockHandler;
+import net.minestom.server.item.ItemStack;
 import net.minestom.server.utils.NamespaceID;
+import net.minestom.server.utils.Rotation;
 import net.minestom.server.utils.async.AsyncUtils;
 import net.minestom.server.world.biomes.Biome;
 import org.jetbrains.annotations.NotNull;
@@ -37,9 +50,11 @@ public class AnvilLoader implements IChunkLoader {
     private static final Biome BIOME = Biome.PLAINS;
 
     private final Map<String, RegionFile> alreadyLoaded = new ConcurrentHashMap<>();
+    private final Map<String, RegionFile> alreadyLoadedEntities = new ConcurrentHashMap<>();
     private final Path path;
     private final Path levelPath;
     private final Path regionPath;
+    private final Path entityRegionPath;
 
     private static class RegionCache extends ConcurrentHashMap<IntIntImmutablePair, Set<IntIntImmutablePair>> {
     }
@@ -48,6 +63,7 @@ public class AnvilLoader implements IChunkLoader {
      * Represents the chunks currently loaded per region. Used to determine when a region file can be unloaded.
      */
     private final RegionCache perRegionLoadedChunks = new RegionCache();
+    private final RegionCache perRegionLoadedChunksEntity = new RegionCache();
 
     // thread local to avoid contention issues with locks
     private final ThreadLocal<Int2ObjectMap<BlockState>> blockStateId2ObjectCacheTLS = ThreadLocal.withInitial(Int2ObjectArrayMap::new);
@@ -56,6 +72,7 @@ public class AnvilLoader implements IChunkLoader {
         this.path = path;
         this.levelPath = path.resolve("level.dat");
         this.regionPath = path.resolve("region");
+        this.entityRegionPath = path.resolve("entities");
     }
 
     public AnvilLoader(@NotNull String path) {
@@ -127,6 +144,9 @@ public class AnvilLoader implements IChunkLoader {
 
             // Block entities
             loadBlockEntities(chunk, chunkReader);
+
+            // Entities
+            loadEntities(chunk, chunkReader);
         }
         synchronized (perRegionLoadedChunks) {
             int regionX = CoordinatesKt.chunkToRegion(chunkX);
@@ -148,6 +168,27 @@ public class AnvilLoader implements IChunkLoader {
                 }
                 synchronized (perRegionLoadedChunks) {
                     Set<IntIntImmutablePair> previousVersion = perRegionLoadedChunks.put(new IntIntImmutablePair(regionX, regionZ), new HashSet<>());
+                    assert previousVersion == null : "The AnvilLoader cache should not already have data for this region.";
+                }
+                return new RegionFile(new RandomAccessFile(regionPath.toFile(), "rw"), regionX, regionZ, instance.getDimensionType().getMinY(), instance.getDimensionType().getMaxY() - 1);
+            } catch (IOException | AnvilException e) {
+                MinecraftServer.getExceptionManager().handleException(e);
+                return null;
+            }
+        });
+    }
+
+    private @Nullable RegionFile getEntityMCAFile(Instance instance, int chunkX, int chunkZ) {
+        final int regionX = CoordinatesKt.chunkToRegion(chunkX);
+        final int regionZ = CoordinatesKt.chunkToRegion(chunkZ);
+        return alreadyLoadedEntities.computeIfAbsent(RegionFile.Companion.createFileName(regionX, regionZ), n -> {
+            try {
+                final Path regionPath = this.entityRegionPath.resolve(n);
+                if (!Files.exists(regionPath)) {
+                    return null;
+                }
+                synchronized (perRegionLoadedChunksEntity) {
+                    Set<IntIntImmutablePair> previousVersion = perRegionLoadedChunksEntity.put(new IntIntImmutablePair(regionX, regionZ), new HashSet<>());
                     assert previousVersion == null : "The AnvilLoader cache should not already have data for this region.";
                 }
                 return new RegionFile(new RandomAccessFile(regionPath.toFile(), "rw"), regionX, regionZ, instance.getDimensionType().getMinY(), instance.getDimensionType().getMaxY() - 1);
@@ -185,8 +226,8 @@ public class AnvilLoader implements IChunkLoader {
                         for (int y = 0; y < Chunk.CHUNK_SECTION_SIZE; y++) {
                             for (int z = 0; z < Chunk.CHUNK_SIZE_Z; z++) {
                                 for (int x = 0; x < Chunk.CHUNK_SIZE_X; x++) {
-                                    int finalX = chunk.chunkX * Chunk.CHUNK_SIZE_X + x;
-                                    int finalZ = chunk.chunkZ * Chunk.CHUNK_SIZE_Z + z;
+                                    int finalX = chunk.getChunkX() * Chunk.CHUNK_SIZE_X + x;
+                                    int finalZ = chunk.getChunkZ() * Chunk.CHUNK_SIZE_Z + z;
                                     int finalY = sectionY * Chunk.CHUNK_SECTION_SIZE + y;
                                     String biomeName = sectionBiomeInformation.getBaseBiome();
                                     Biome biome = biomeCache.computeIfAbsent(biomeName, n ->
@@ -199,8 +240,8 @@ public class AnvilLoader implements IChunkLoader {
                         for (int y = 0; y < Chunk.CHUNK_SECTION_SIZE; y++) {
                             for (int z = 0; z < Chunk.CHUNK_SIZE_Z; z++) {
                                 for (int x = 0; x < Chunk.CHUNK_SIZE_X; x++) {
-                                    int finalX = chunk.chunkX * Chunk.CHUNK_SIZE_X + x;
-                                    int finalZ = chunk.chunkZ * Chunk.CHUNK_SIZE_Z + z;
+                                    int finalX = chunk.getChunkX() * Chunk.CHUNK_SIZE_X + x;
+                                    int finalZ = chunk.getChunkZ() * Chunk.CHUNK_SIZE_Z + z;
                                     int finalY = sectionY * Chunk.CHUNK_SECTION_SIZE + y;
 
                                     int index = x / 4 + (z / 4) * 4 + (y / 4) * 16;
@@ -301,6 +342,143 @@ public class AnvilLoader implements IChunkLoader {
         }
     }
 
+    private void loadEntities(Chunk chunk, ChunkReader chunkReader) {
+        final RegionFile mcaFile = getEntityMCAFile(chunk.getInstance(), chunk.getChunkX(), chunk.getChunkZ());
+        if (mcaFile == null) return;
+        NBTCompound chunkData = null;
+        try {
+            chunkData = mcaFile.getChunkData(chunk.getChunkX(), chunk.getChunkZ());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        if (chunkData == null) return;
+
+        final var entities = chunkData.getList("Entities");
+        for (NBT entityNBT : entities) {
+            final var compound = (NBTCompound) entityNBT;
+
+            final var entityNamespace = compound.getString("id");
+            final var posList = compound.getList("Pos");
+            final var rotationList = compound.getList("Rotation");
+
+            final var entityType = EntityType.fromNamespaceId(entityNamespace);
+            final var position = new Pos(
+                    (double) posList.get(0).getValue(), // x
+                    (double) posList.get(1).getValue(), // y
+                    (double) posList.get(2).getValue(), // z
+                    (float) rotationList.get(0).getValue(), // yaw
+                    (float) rotationList.get(1).getValue()  // pitch
+            );
+
+            Entity entity = switch (entityType.registry().spawnType()) {
+                case LIVING -> new LivingEntity(entityType);
+                default -> new Entity(entityType);
+            };
+
+            entity.setNoGravity(true);
+
+            entity.setInvisible(compound.getBoolean("Invisible"));
+
+            if (entityType.registry().spawnType() == EntitySpawnType.LIVING) {
+                assert entity instanceof LivingEntity;
+
+                final var armorItemsList = compound.getList("ArmorItems");
+                final var handItemsList = compound.getList("HandItems");
+                final var livingEntity = (LivingEntity) entity;
+
+                livingEntity.setHealth(compound.getFloat("Health"));
+                livingEntity.setFireForDuration(compound.getShort("Fire"));
+                livingEntity.setInvulnerable(compound.getBoolean("Invulnerable"));
+
+                // Armour
+                final var helmetCompound = (NBTCompound) armorItemsList.get(3);
+                final var chestplateCompound = (NBTCompound) armorItemsList.get(2);
+                final var leggingsCompound = (NBTCompound) armorItemsList.get(1);
+                final var bootsCompound = (NBTCompound) armorItemsList.get(0);
+                if (helmetCompound.contains("id")) livingEntity.setHelmet(ItemStack.fromItemNBT(helmetCompound));
+                if (chestplateCompound.contains("id")) livingEntity.setChestplate(ItemStack.fromItemNBT(chestplateCompound));
+                if (leggingsCompound.contains("id")) livingEntity.setLeggings(ItemStack.fromItemNBT(leggingsCompound));
+                if (bootsCompound.contains("id")) livingEntity.setBoots(ItemStack.fromItemNBT(bootsCompound));
+
+                // Held Items
+                final var mainCompound = (NBTCompound) handItemsList.get(0);
+                final var offCompound = (NBTCompound) handItemsList.get(1);
+                if (mainCompound.contains("id")) livingEntity.setItemInMainHand(ItemStack.fromItemNBT(mainCompound));
+                if (offCompound.contains("id")) livingEntity.setItemInOffHand(ItemStack.fromItemNBT(offCompound));
+            }
+
+            if (entityType.equals(EntityType.ARMOR_STAND)) {
+                final var armorStandMeta = (ArmorStandMeta) entity.getEntityMeta();
+
+                armorStandMeta.setSmall(compound.getBoolean("Small"));
+                armorStandMeta.setHasArms(compound.getBoolean("ShowArms"));
+                armorStandMeta.setHasNoBasePlate(compound.getBoolean("NoBasePlate"));
+
+                final var poseCompound = compound.getCompound("Pose");
+                if (poseCompound != null) {
+                    final var bodyPoseList = poseCompound.getList("Body");
+                    final var headPoseList = poseCompound.getList("Head");
+                    final var leftArmPoseList = poseCompound.getList("LeftArm");
+                    final var rightArmPoseList = poseCompound.getList("RightArm");
+                    final var leftLegPoseList = poseCompound.getList("LeftLeg");
+                    final var rightLegPoseList = poseCompound.getList("RightLeg");
+
+                    if (bodyPoseList != null) armorStandMeta.setBodyRotation(new Vec(
+                            (float) bodyPoseList.get(0).getValue(),
+                            (float) bodyPoseList.get(1).getValue(),
+                            (float) bodyPoseList.get(2).getValue()
+                    ));
+
+                    if (headPoseList != null) armorStandMeta.setHeadRotation(new Vec(
+                            (float) headPoseList.get(0).getValue(),
+                            (float) headPoseList.get(1).getValue(),
+                            (float) headPoseList.get(2).getValue()
+                    ));
+
+                    if (leftArmPoseList != null) armorStandMeta.setLeftArmRotation(new Vec(
+                            (float) leftArmPoseList.get(0).getValue(),
+                            (float) leftArmPoseList.get(1).getValue(),
+                            (float) leftArmPoseList.get(2).getValue()
+                    ));
+
+                    if (rightArmPoseList != null) armorStandMeta.setRightArmRotation(new Vec(
+                            (float) rightArmPoseList.get(0).getValue(),
+                            (float) rightArmPoseList.get(1).getValue(),
+                            (float) rightArmPoseList.get(2).getValue()
+                    ));
+
+                    if (leftLegPoseList != null) armorStandMeta.setLeftLegRotation(new Vec(
+                            (float) leftLegPoseList.get(0).getValue(),
+                            (float) leftLegPoseList.get(1).getValue(),
+                            (float) leftLegPoseList.get(2).getValue()
+                    ));
+
+                    if (rightLegPoseList != null) armorStandMeta.setRightLegRotation(new Vec(
+                            (float) rightLegPoseList.get(0).getValue(),
+                            (float) rightLegPoseList.get(1).getValue(),
+                            (float) rightLegPoseList.get(2).getValue()
+                    ));
+                }
+            }
+
+            if (entityType.equals(EntityType.ITEM_FRAME) || entityType.equals(EntityType.GLOW_ITEM_FRAME)) {
+                final var itemFrameMeta = (ItemFrameMeta) entity.getEntityMeta();
+
+                final var frameRotation = compound.getByte("ItemRotation");
+                final var frameFacing = compound.getByte("Facing");
+                itemFrameMeta.setRotation(Rotation.values()[frameRotation]);
+                itemFrameMeta.setOrientation(ItemFrameMeta.Orientation.values()[frameFacing]);
+
+                final var itemCompound = compound.getCompound("Item");
+                if (itemCompound != null && itemCompound.contains("id")) {
+                    itemFrameMeta.setItem(ItemStack.fromItemNBT(itemCompound));
+                }
+            }
+
+            entity.setInstance(chunk.getInstance(), position);
+        }
+    }
+
     @Override
     public @NotNull CompletableFuture<Void> saveInstance(@NotNull Instance instance) {
         final NBTCompound nbt = instance.tagHandler().asCompound();
@@ -322,7 +500,7 @@ public class AnvilLoader implements IChunkLoader {
         final int chunkZ = chunk.getChunkZ();
         RegionFile mcaFile;
         synchronized (alreadyLoaded) {
-            mcaFile = getMCAFile(chunk.instance, chunkX, chunkZ);
+            mcaFile = getMCAFile(chunk.getInstance(), chunkX, chunkZ);
             if (mcaFile == null) {
                 final int regionX = CoordinatesKt.chunkToRegion(chunkX);
                 final int regionZ = CoordinatesKt.chunkToRegion(chunkZ);
@@ -441,15 +619,15 @@ public class AnvilLoader implements IChunkLoader {
      */
     @Override
     public void unloadChunk(Chunk chunk) {
-        final int regionX = CoordinatesKt.chunkToRegion(chunk.chunkX);
-        final int regionZ = CoordinatesKt.chunkToRegion(chunk.chunkZ);
+        final int regionX = CoordinatesKt.chunkToRegion(chunk.getChunkX());
+        final int regionZ = CoordinatesKt.chunkToRegion(chunk.getChunkZ());
 
         final IntIntImmutablePair regionKey = new IntIntImmutablePair(regionX, regionZ);
         synchronized (perRegionLoadedChunks) {
             Set<IntIntImmutablePair> chunks = perRegionLoadedChunks.get(regionKey);
             if (chunks != null) { // if null, trying to unload a chunk from a region that was not created by the AnvilLoader
                 // don't check return value, trying to unload a chunk not created by the AnvilLoader is valid
-                chunks.remove(new IntIntImmutablePair(chunk.chunkX, chunk.chunkZ));
+                chunks.remove(new IntIntImmutablePair(chunk.getChunkX(), chunk.getChunkZ()));
 
                 if (chunks.isEmpty()) {
                     perRegionLoadedChunks.remove(regionKey);

@@ -34,7 +34,6 @@ public sealed interface ItemMeta extends TagReadable, NetworkBuffer.Writer
     default int getDamage() {
         return getTag(ItemTags.DAMAGE);
     }
-
     @Contract(pure = true)
     default boolean isUnbreakable() {
         return getTag(ItemTags.UNBREAKABLE);

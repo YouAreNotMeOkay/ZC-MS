@@ -147,7 +147,6 @@ public sealed interface ItemStack extends TagReadable, HoverEventSource<HoverEve
     default @NotNull ItemStack withLore(@NotNull UnaryOperator<@NotNull List<@NotNull Component>> loreUnaryOperator) {
         return withLore(loreUnaryOperator.apply(getLore()));
     }
-
     @Contract(pure = true)
     default boolean isAir() {
         return material() == Material.AIR;
@@ -192,6 +191,7 @@ public sealed interface ItemStack extends TagReadable, HoverEventSource<HoverEve
     default int getAmount() {
         return amount();
     }
+
 
     @Deprecated
     @Contract(pure = true)
