@@ -399,7 +399,8 @@ public class AnvilLoader implements IChunkLoader {
                 final var leggingsCompound = (NBTCompound) armorItemsList.get(1);
                 final var bootsCompound = (NBTCompound) armorItemsList.get(0);
                 if (helmetCompound.contains("id")) livingEntity.setHelmet(ItemStack.fromItemNBT(helmetCompound));
-                if (chestplateCompound.contains("id")) livingEntity.setChestplate(ItemStack.fromItemNBT(chestplateCompound));
+                if (chestplateCompound.contains("id"))
+                    livingEntity.setChestplate(ItemStack.fromItemNBT(chestplateCompound));
                 if (leggingsCompound.contains("id")) livingEntity.setLeggings(ItemStack.fromItemNBT(leggingsCompound));
                 if (bootsCompound.contains("id")) livingEntity.setBoots(ItemStack.fromItemNBT(bootsCompound));
 
@@ -463,22 +464,23 @@ public class AnvilLoader implements IChunkLoader {
                     ));
                 }
             }
+            try {
+                if (entityType.equals(EntityType.ITEM_FRAME) || entityType.equals(EntityType.GLOW_ITEM_FRAME)) {
+                    final var itemFrameMeta = (ItemFrameMeta) entity.getEntityMeta();
+                    final var frameRotation = compound.getByte("ItemRotation");
+                    System.out.println(compound);
+                    final var frameFacing = compound.getByte("Facing");
+                    itemFrameMeta.setRotation(Rotation.values()[frameRotation]);
+                    itemFrameMeta.setOrientation(ItemFrameMeta.Orientation.values()[frameFacing]);
 
-            if (entityType.equals(EntityType.ITEM_FRAME) || entityType.equals(EntityType.GLOW_ITEM_FRAME)) {
-                final var itemFrameMeta = (ItemFrameMeta) entity.getEntityMeta();
-
-                final var frameRotation = compound.getByte("ItemRotation");
-                final var frameFacing = compound.getByte("Facing");
-                itemFrameMeta.setRotation(Rotation.values()[frameRotation]);
-                itemFrameMeta.setOrientation(ItemFrameMeta.Orientation.values()[frameFacing]);
-
-                final var itemCompound = compound.getCompound("Item");
-                if (itemCompound != null && itemCompound.contains("id")) {
-                    itemFrameMeta.setItem(ItemStack.fromItemNBT(itemCompound));
+                    final var itemCompound = compound.getCompound("Item");
+                    if (itemCompound != null && itemCompound.contains("id")) {
+                        itemFrameMeta.setItem(ItemStack.fromItemNBT(itemCompound));
+                    }
                 }
-            }
 
-            entity.setInstance(chunk.getInstance(), position);
+                entity.setInstance(chunk.getInstance(), position);
+            }catch (Exception ignored){}
         }
     }
 
