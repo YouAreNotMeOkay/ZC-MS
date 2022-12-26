@@ -482,7 +482,9 @@ public class AnvilLoader implements IChunkLoader {
                 }
 
                 entity.setInstance(chunk.getInstance(), position);
-            }catch (Exception ignored){}
+            }catch (Exception exception){
+                System.out.println(exception.toString());
+            }
         }
     }
 
