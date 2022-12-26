@@ -467,8 +467,10 @@ public class AnvilLoader implements IChunkLoader {
             try {
                 if (entityType.equals(EntityType.ITEM_FRAME) || entityType.equals(EntityType.GLOW_ITEM_FRAME)) {
                     final var itemFrameMeta = (ItemFrameMeta) entity.getEntityMeta();
-                    final var frameRotation = compound.getByte("ItemRotation");
-                    System.out.println(compound);
+                    byte frameRotation = 0;
+                    if(compound.getByte("ItemRotation") != null) {
+                        frameRotation = compound.getByte("ItemRotation");
+                    }
                     final var frameFacing = compound.getByte("Facing");
                     itemFrameMeta.setRotation(Rotation.values()[frameRotation]);
                     itemFrameMeta.setOrientation(ItemFrameMeta.Orientation.values()[frameFacing]);
