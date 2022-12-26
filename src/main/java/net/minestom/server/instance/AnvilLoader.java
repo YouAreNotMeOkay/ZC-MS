@@ -52,9 +52,9 @@ public class AnvilLoader implements IChunkLoader {
     private final Map<String, RegionFile> alreadyLoaded = new ConcurrentHashMap<>();
     private final Map<String, RegionFile> alreadyLoadedEntities = new ConcurrentHashMap<>();
     private final Path path;
-    private final Path levelPath;
-    private final Path regionPath;
-    private final Path entityRegionPath;
+    private Path levelPath;
+    private Path regionPath;
+    private Path entityRegionPath;
 
     private static class RegionCache extends ConcurrentHashMap<IntIntImmutablePair, Set<IntIntImmutablePair>> {
     }
@@ -76,7 +76,10 @@ public class AnvilLoader implements IChunkLoader {
     }
 
     public AnvilLoader(@NotNull String path) {
-        this(Path.of(path));
+        this.path = Path.of(path);
+        this.levelPath = Path.of(path).resolve("level.dat");
+        this.regionPath = Path.of(path).resolve("region");
+        this.entityRegionPath = Path.of(path).resolve("entities");
     }
 
     @Override
